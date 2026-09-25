@@ -1,8 +1,9 @@
 import socket 
 import json 
 import datetime 
+import asyncio 
 
-def __main__(): 
+async def __main__(): 
     
     serversocket= socket.socket(socket.AF_INET, socket.SOCK_STREAM ) 
     
@@ -23,12 +24,37 @@ def __main__():
     
     print("Client IP Address Is: ", clientaddr ) 
     
+    timer= "" 
+    
     try: 
         while True: 
         
             request= sck.recv(1024 ) 
+            if timer!= "": 
+                timer.cancel() 
+                try: 
+                    await timer 
+                except asyncio.CancelledError: 
+                    pass 
+                timer= "" 
+            timer= asyncio.create_task(start_timer(sck, clientaddr ) ) 
+            print(timer ) 
             
             requestdc= request.decode(encoding= "utf-8" ) 
+            
+            if requestdc== "": 
+                timer.cancel() 
+                try: 
+                    await timer 
+                except asyncio.CancelledError: 
+                    pass 
+                timer= "" 
+                sck.close() 
+                (sck, clientaddr )= serversocket.accpet() 
+                
+                print("Client IP Address Is: ", clientaddr ) 
+                
+                continue 
             
             # print(requestdc.split('\r\n' ) ) 
             
@@ -48,6 +74,11 @@ def __main__():
         response= errMessage(500, e ) 
         sck.send(response ) 
         raise 
+    
+async def start_timer(sck, clientaddr ): 
+    await asyncio.sleep(65.0 ) 
+    sck.close() 
+    print(f"Connection to {clientaddr } has been closed " ) 
     
 def parseHeaders(req ): 
     
@@ -142,11 +173,12 @@ def successMessage(code, message, req ):
     status= f"{req[2] } {code } {codeMap[code ] }" 
     response= status 
     date= f"Date: {datetime.datetime.now() }" 
+    host= f"Host: localhost" 
     content_type= f"Content-Type: application/json" 
     responseBody= { "message": message } 
     content_length= f"Content-Length: {len(json.dumps(responseBody ) ) }" 
     connection= f"Connection: keep-alive" 
-    response= response+ f"\r\n{date }\r\n{content_type }\r\n{content_length }\r\n{connection }\r\n\r\n{json.dumps(responseBody ) }\r\n" 
+    response= response+ f"\r\n{date }\r\n{host }\r\n{content_type }\r\n{content_length }\r\n{connection }\r\n\r\n{json.dumps(responseBody ) }\r\n" 
     response= response.encode() 
     return response 
     
@@ -166,14 +198,15 @@ def errMessage(code, message ):
     allow_methods= f"Allow: GET\r\n" 
     if code== 405: 
         response= response+ allow_methods 
+    host= f"Host: localhost\r\n" 
     content_type= f"Content-type: application/json\r\n" 
     responseBody= { "message": message } 
     content_length= f"Content-Length: {len(json.dumps(responseBody ) ) }\r\n" 
     connection= f"Connection: keep-alive\r\n\r\n" 
-    response= response+ date+ content_type+ content_length+ connection 
+    response= response+ host+ date+ content_type+ content_length+ connection 
     response= response+ (json.dumps(responseBody ) )+ "\r\n" 
     
     response= response.encode() 
     return response 
         
-__main__() 
+asyncio.run(__main__() ) 
